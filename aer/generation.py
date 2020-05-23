@@ -96,6 +96,25 @@ def generate(args: argparse.Namespace) -> None:
         epoch_loss = np.mean(losses)
         print("Loss:", epoch_loss)
 
+    # The generation/eval loop.
+    model.eval()
+    batch = train_sequences[-1]
+    for _ in range(10000):
+        with torch.no_grad():
+            # Make prediction.
+            pred = model(batch)
+
+            # Flatten the batch, convert to a list, remove first element.
+            flat_batch = list(batch.view(-1).numpy())
+            flat_batch = flat_batch[-len(flat_batch) + 1:]
+
+            # Append prediction to flat batch.
+            flat_batch.append(pred[-1][0])
+
+            # Convert back to appropriately-shaped tensor.
+            batch = torch.Tensor(flat_batch).view(args.batch_size, args.seq_len, 1)
+
+            print(pred[-1][0])
 
 class LSTM(nn.Module):
     """ A simple LSTM module. """

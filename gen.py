@@ -22,7 +22,7 @@ def main() -> None:
         "--num-layers", type=int, default=3, help="Num layers for LSTM."
     )
     parser.add_argument(
-        "--epochs", type=int, default=32, help="Number of training epochs."
+        "--epochs", type=int, default=5, help="Number of training epochs."
     )
     args = parser.parse_args()
     generate(args)
