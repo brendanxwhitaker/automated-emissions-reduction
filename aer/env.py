@@ -54,7 +54,6 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         """ This is just here to make pylint happy. """
         raise NotImplementedError
 
-
     @staticmethod
     def get_obs(
         temperature: float, refrigerating: bool, rates: List[float]
@@ -109,28 +108,30 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         self.temperature = max(self.temperature, 28)
         self.temperature = min(self.temperature, 48)
 
-        # Compute energy consumption for this 1-minute interval.
+        oob = self.temperature < 33 or self.temperature > 43
+
+        # Compute energy consumption for this interval.
         mwhs = (1 / self.res) * self.power if self.refrigerating else 0
 
-        # Compute CO2 emissions in lbs for this 1-minute interval.
-        co2 = mwhs * self.series[self.i]
-
+        # Compute CO2 emissions in lbs for this interval.
         # Reward is negative of emissions.
-        rew = -co2
+        rew = -mwhs * self.series[self.i]
+        co2 = mwhs * ((self.series[self.i] * 750) + 750)
 
-        rew *= 10
-
-        # DEBUG
-        rew = 0
+        rew *= 10000
+        # base_rew = rew
+        penalty = 0.0
 
         if not 33 <= self.temperature <= 43:
             if self.temperature < 33:
                 error = 33 - self.temperature
             else:
                 error = self.temperature - 43
-            rew += -1 * (1 + error)
+            penalty = -1 * (1 + error)
+            rew += penalty
 
-        # print("Temperature/reward/action:", self.temperature, rew, act)
+        # print(f"temp/rew/base_rew/temp_penalty/act: ")
+        # print(f"{self.temperature:.3f}/{rew:.3f}/{base_rew:.3f}/{penalty:.3f}/{act}")
 
         # Increment pointer for emissions rate array, and compute next observation.
         self.i += 1
@@ -141,4 +142,4 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         if self.i + 12 >= len(self.series):
             done = True
 
-        return ob, rew, done, {}
+        return ob, rew, done, {"co2": co2, "oob": oob}
