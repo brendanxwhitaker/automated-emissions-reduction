@@ -13,7 +13,10 @@ def main() -> None:
         "--save-path", type=str, required=True, help="Path for saved svg."
     )
     parser.add_argument(
-        "--settings-path", type=str, required=True, help="Path to plotplotplot settings file."
+        "--settings-path",
+        type=str,
+        required=True,
+        help="Path to plotplotplot settings file.",
     )
     args = parser.parse_args()
     visualize(args)

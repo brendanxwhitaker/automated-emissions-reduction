@@ -8,8 +8,8 @@ import torch
 from torch import nn
 from torch.distributions import Categorical
 
-from asta import Array, Tensor, shapes, dims, symbols, typechecked
 from oxentiel import Oxentiel
+from asta import Array, Tensor, shapes, dims, symbols, typechecked
 
 # pylint: disable=too-few-public-methods, invalid-name
 
