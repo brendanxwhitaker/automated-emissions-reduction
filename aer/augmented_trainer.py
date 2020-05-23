@@ -2,7 +2,7 @@
 import time
 import gym
 import numpy as np
-from torch.optim import AdamW
+from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from oxentiel import Oxentiel
 from asta import Array, Tensor, shapes, dims
@@ -33,11 +33,8 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
     ac = ActorCritic(shapes.OB[0], ox.hidden_dim, dims.ACTS)
 
     # Make optimizers.
-    policy_optimizer = AdamW(ac.pi.parameters(), lr=ox.lr)
-    value_optimizer = AdamW(ac.v.parameters(), lr=ox.lr)
-
-    policy_scheduler = CosineAnnealingWarmRestarts(policy_optimizer, ox.restart_epochs)
-    value_scheduler = CosineAnnealingWarmRestarts(value_optimizer, ox.restart_epochs)
+    policy_optimizer = Adam(ac.pi.parameters(), lr=ox.lr)
+    value_optimizer = Adam(ac.v.parameters(), lr=ox.lr)
 
     # Create a buffer object to store trajectories.
     rollouts = RolloutStorage(ox.batch_size, shapes.OB)
@@ -147,14 +144,12 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
             policy_loss = get_policy_loss(ac.pi, obs, acts, advs)
             policy_loss.backward()
             policy_optimizer.step()
-            policy_scheduler.step(epoch)
 
             # Run a backward pass on the value function (critic).
             value_optimizer.zero_grad()
             value_loss = get_value_loss(ac.v, obs, rtgs)
             value_loss.backward()
             value_optimizer.step()
-            value_scheduler.step(epoch)
 
             # Reset pointers.
             rollouts.batch_len = 0
