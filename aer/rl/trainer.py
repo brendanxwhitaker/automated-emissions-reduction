@@ -41,6 +41,10 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
     ob: Array[float, shapes.OB]
     ob = env.reset()
 
+    oobs = []
+    co2s = []
+    mean_co2 = 0
+
     t_start = time.time()
 
     for i in range(ox.iterations):
@@ -54,7 +58,11 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
         next_ob: Array[float, shapes.OB]
         rew: int
         done: bool
-        next_ob, rew, done, _ = env.step(int(act))
+        next_ob, rew, done, info = env.step(int(act))
+
+        # Get co2 lbs.
+        co2s.append(info["co2"])
+        oobs.append(info["oob"])
 
         # Add data for a timestep to the buffer.
         rollouts.add(ob, act, val, rew)
@@ -77,6 +85,7 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
             vals, rews = rollouts.get_episode_values_and_rewards()
 
             mean_rew = np.mean(rews)
+            num_oobs = sum([int(oob) for oob in oobs])
 
             # The last value should be zero if this is the end of an episode.
             last_val: float = 0.0 if done else vals[-1]
@@ -92,6 +101,9 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
 
                 # Reset the environment.
                 ob = env.reset()
+                mean_co2 = sum(co2s)
+                co2s = []
+                oobs = []
 
             # Step 2: Reset vals and rews in buffer and record computed quantities.
             rollouts.vals[:] = 0
@@ -130,11 +142,10 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
             rollouts.ep_start = 0
 
             # Print statistics.
-            mean_ret = np.mean(rollouts.rets)
-            mean_len = np.mean(rollouts.lens)
             print(f"Iteration: {i + 1} | ", end="")
             print(f"Time: {time.time() - t_start:.5f} | ", end="")
-            print(f"Mean episode return: {mean_ret:.5f} | ", end="")
+            print(f"Total co2: {mean_co2:.5f} | ", end="")
+            print(f"Num OOBs: {num_oobs:.5f} | ", end="")
             print(f"Mean reward for current batch: {mean_rew:.5f}")
             t_start = time.time()
             rollouts.rets = []
