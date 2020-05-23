@@ -5,6 +5,7 @@ import numpy as np
 from asta import Array
 
 from aer.utils import read_series
+from aer.agent import DeterministicAgent
 
 
 class AutomatedEmissionsReductionEnv(gym.Env):
@@ -55,7 +56,7 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         raise NotImplementedError
 
     @staticmethod
-    def get_obs(
+    def get_ob(
         temperature: float, refrigerating: bool, rates: List[float]
     ) -> Array[float, 14]:
         """ Return the observation, with temperature normalized. """
@@ -71,7 +72,7 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         self.refrigerating = False
 
         rates = list(self.series[self.i : self.i + 12])
-        ob = self.get_obs(self.temperature, self.refrigerating, rates)
+        ob = self.get_ob(self.temperature, self.refrigerating, rates)
         return ob
 
     def step(self, act: int) -> Tuple[Array[float, 14], float, bool, dict]:
@@ -126,7 +127,7 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         # Increment pointer for emissions rate array, and compute next observation.
         self.i += 1
         rates = list(self.series[self.i : self.i + 12])
-        ob = self.get_obs(self.temperature, self.refrigerating, rates)
+        ob = self.get_ob(self.temperature, self.refrigerating, rates)
 
         done = False
         if self.i + 12 >= len(self.series):
@@ -208,13 +209,12 @@ class SimplifiedAEREnv(gym.Env):
         """ This is just here to make pylint happy. """
         raise NotImplementedError
 
-    @staticmethod
-    def get_obs(
-        temperature: float, refrigerating: bool, rate: float, mean_rate: float
-    ) -> Array[float, 4]:
+    def get_ob(self) -> Array[float, 4]:
         """ Return the observation, with temperature normalized. """
-        normed_temperature = (temperature - 38) / 10
-        fridge = 1 if refrigerating else -1
+        rate = self.series[self.i]
+        mean_rate = np.mean(self.series[self.i : self.i + 12])
+        normed_temperature = (self.temperature - 38) / 10
+        fridge = 1 if self.refrigerating else -1
         ob = np.array([normed_temperature, fridge, rate, mean_rate])
         return ob
 
@@ -223,10 +223,8 @@ class SimplifiedAEREnv(gym.Env):
         self.i = 0
         self.temperature = 33
         self.refrigerating = False
+        ob = self.get_ob()
 
-        rate = self.series[self.i]
-        mean_rate = np.mean(self.series[self.i : self.i + 12])
-        ob = self.get_obs(self.temperature, self.refrigerating, rate, mean_rate)
         return ob
 
     def step(self, act: int) -> Tuple[Array[float, 4], float, bool, dict]:
@@ -280,9 +278,7 @@ class SimplifiedAEREnv(gym.Env):
 
         # Increment pointer for emissions rate array, and compute next observation.
         self.i += 1
-        rate = self.series[self.i]
-        mean_rate = np.mean(self.series[self.i : self.i + 12])
-        ob = self.get_obs(self.temperature, self.refrigerating, rate, mean_rate)
+        ob = self.get_ob()
 
         done = False
         if self.i + 12 >= len(self.series):
