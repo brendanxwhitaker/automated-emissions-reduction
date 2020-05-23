@@ -1,0 +1,9 @@
+git+git://github.com/brendanxwhitaker/plotplotplot.git
+git+git://github.com/brendanxwhitaker/asta.git
+pylint
+torch
+numpy
+pandas
+gym
+black
+mypy
