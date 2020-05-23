@@ -1,13 +1,12 @@
 """ Trains a time-series prediction model to generate synthetic training data. """
 import argparse
-import datetime
 
 import torch
 import torch.nn as nn
 import numpy as np
-import pandas as pd
 
 from asta import Array, Tensor, dims, typechecked
+from aer.utils import read_series
 
 STEPS = dims.STEPS
 SEQ_LEN = dims.SEQ_LEN
@@ -18,27 +17,9 @@ BATCH_SIZE = dims.BATCH_SIZE
 NUM_DIRS = dims.NUM_DIRS
 
 
-def parse_datetime(rep: str) -> str:
-    """ Removes UTC offset. """
-    segments = rep.split("+")
-    if not segments:
-        raise ValueError("Failed to parse datetime.")
-    return segments[0]
-
-
 def generate(args: argparse.Namespace) -> None:
     """ Generate synthetic training data from an example source. """
-    # Assumes single-row header and format: ``<datetime>, <int>``.
-    frame = pd.read_csv(args.source_path, sep=",")
-    raw_series = frame.values
-    dims.STEPS = len(raw_series)
-
-    # Convert strings to datetimes.
-    for i in range(dims.STEPS):
-        stamp = parse_datetime(raw_series[i][0])
-        raw_series[i][0] = datetime.datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
-
-    series: Array[STEPS] = raw_series[:, 1]
+    series = read_series(args.source_path)
 
     # Normalize the entire time series.
     mean, std = np.mean(series), np.std(series)
@@ -46,7 +27,7 @@ def generate(args: argparse.Namespace) -> None:
     series = series / std
 
     # Arrange in sequences for training (-1 is so we have targets for each seq).
-    num_seqs = max(0, dims.STEPS - args.seq_len - 1)
+    num_seqs = max(0, len(series) - args.seq_len - 1)
 
     # Shapes.
     sequences: Array[int, num_seqs, args.seq_len]
@@ -106,7 +87,7 @@ def generate(args: argparse.Namespace) -> None:
 
             # Flatten the batch, convert to a list, remove first element.
             flat_batch = list(batch.view(-1).numpy())
-            flat_batch = flat_batch[-len(flat_batch) + 1:]
+            flat_batch = flat_batch[-len(flat_batch) + 1 :]
 
             # Append prediction to flat batch.
             flat_batch.append(pred[-1][0])
@@ -115,6 +96,7 @@ def generate(args: argparse.Namespace) -> None:
             batch = torch.Tensor(flat_batch).view(args.batch_size, args.seq_len, 1)
 
             print(pred[-1][0])
+
 
 class LSTM(nn.Module):
     """ A simple LSTM module. """

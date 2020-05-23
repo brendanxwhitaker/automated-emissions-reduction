@@ -1,8 +1,6 @@
 """ Trains a time-series prediction model to generate synthetic training data. """
 import argparse
-import datetime
 
-import numpy as np
 import pandas as pd
 
 from plotplotplot.draw import graph
