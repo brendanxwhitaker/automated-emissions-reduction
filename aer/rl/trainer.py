@@ -3,8 +3,8 @@ import time
 import gym
 import numpy as np
 from torch.optim import Adam
-from asta import Array, Tensor, shapes, dims
 from oxentiel import Oxentiel
+from asta import Array, Tensor, shapes, dims
 
 from aer.rl.vpg import ActorCritic, RolloutStorage
 from aer.rl.vpg import (
@@ -76,6 +76,8 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
             rews: Array[float, ep_len]
             vals, rews = rollouts.get_episode_values_and_rewards()
 
+            mean_rew = np.mean(rews)
+
             # The last value should be zero if this is the end of an episode.
             last_val: float = 0.0 if done else vals[-1]
 
@@ -88,6 +90,9 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
                 rollouts.lens.append(len(advs))
                 rollouts.rets.append(np.sum(rews))
 
+                # Reset the environment.
+                ob = env.reset()
+
             # Step 2: Reset vals and rews in buffer and record computed quantities.
             rollouts.vals[:] = 0
             rollouts.rews[:] = 0
@@ -99,9 +104,6 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
             rollouts.rtgs[j : j + ep_len] = rtgs
             rollouts.ep_start = j + ep_len
             rollouts.ep_len = 0
-
-            # Step 3: Reset the environment.
-            ob = env.reset()
 
         # If we completed a batch.
         if rollouts.batch_len == ox.batch_size:
@@ -133,7 +135,7 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
             print(f"Iteration: {i + 1} | ", end="")
             print(f"Time: {time.time() - t_start:.5f} | ", end="")
             print(f"Mean episode return: {mean_ret:.5f} | ", end="")
-            print(f"Mean episode length: {mean_len:.5f}")
+            print(f"Mean reward for current batch: {mean_rew:.5f}")
             t_start = time.time()
             rollouts.rets = []
             rollouts.lens = []

@@ -26,6 +26,6 @@ def read_series(source_path: str) -> Array[float, -1]:
         stamp = parse_datetime(raw_series[i][0])
         raw_series[i][0] = datetime.datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
 
-    series: Array[-1] = raw_series[:, 1]
+    series: Array[-1] = raw_series[:, 1].astype(float)
 
     return series

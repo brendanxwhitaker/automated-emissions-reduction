@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from asta import Array, Tensor, dims, typechecked
+from asta import Array, Tensor, dims
 from aer.utils import read_series
 
 STEPS = dims.STEPS
