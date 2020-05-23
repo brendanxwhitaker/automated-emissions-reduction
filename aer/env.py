@@ -115,20 +115,10 @@ class AutomatedEmissionsReductionEnv(gym.Env):
 
         # Compute CO2 emissions in lbs for this interval.
         # Reward is negative of emissions.
-        rew = -mwhs * self.series[self.i]
         co2 = mwhs * ((self.series[self.i] * 750) + 750)
 
-        rew *= 10000
-        # base_rew = rew
-        penalty = 0.0
-
-        if not 33 <= self.temperature <= 43:
-            if self.temperature < 33:
-                error = 33 - self.temperature
-            else:
-                error = self.temperature - 43
-            penalty = -1 * (1 + error)
-            rew += penalty
+        # Compute reward.
+        rew = self.get_emissions_reward(mwhs, self.series[self.i])
 
         # print(f"temp/rew/base_rew/temp_penalty/act: ")
         # print(f"{self.temperature:.3f}/{rew:.3f}/{base_rew:.3f}/{penalty:.3f}/{act}")
@@ -143,3 +133,30 @@ class AutomatedEmissionsReductionEnv(gym.Env):
             done = True
 
         return ob, rew, done, {"co2": co2, "oob": oob}
+
+    @staticmethod
+    def get_dual_reward(mwhs: float, rate: float, temperature: float) -> float:
+        """ Computes reward incorporating emissions and temperature range. """
+        rew = -mwhs * rate
+        rew *= 10000
+        penalty = 0.0
+
+        cushion = 0.5
+        if temperature < 33 + cushion or 43 - cushion < temperature:
+            if temperature < 33 + cushion:
+                error = 33 + cushion - temperature
+            else:
+                error = temperature - (43 - cushion)
+            penalty = -1 * (1 + error)
+            penalty *= 5
+            rew += penalty
+
+        return rew
+
+
+    @staticmethod
+    def get_emissions_reward(mwhs: float, rate: float) -> float:
+        """ Computes reward minimizing emissions only. """
+        rew = -mwhs * rate
+        rew *= 10000
+        return rew

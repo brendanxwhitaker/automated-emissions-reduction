@@ -3,6 +3,7 @@ import json
 from oxentiel import Oxentiel
 from aer.env import AutomatedEmissionsReductionEnv
 from aer.rl.trainer import train
+from aer.augmented_trainer import train
 
 SETTINGS_PATH = "settings_vpg.json"
 SOURCE_PATH = "data/MOERS.csv"
