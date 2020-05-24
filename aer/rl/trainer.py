@@ -35,8 +35,12 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
     policy_optimizer = Adam(ac.pi.parameters(), lr=ox.lr)
     value_optimizer = Adam(ac.v.parameters(), lr=ox.lr)
 
-    policy_scheduler = OneCycleLR(policy_optimizer, ox.lr, ox.lr_cycle_steps)
-    value_scheduler = OneCycleLR(value_optimizer, ox.lr, ox.lr_cycle_steps)
+    policy_scheduler = OneCycleLR(
+        policy_optimizer, ox.lr, ox.lr_cycle_steps, pct_start=ox.pct_start
+    )
+    value_scheduler = OneCycleLR(
+        value_optimizer, ox.lr, ox.lr_cycle_steps, pct_start=ox.pct_start
+    )
 
     # Create a buffer object to store trajectories.
     rollouts = RolloutStorage(ox.batch_size, shapes.OB)

@@ -280,6 +280,8 @@ good-names=i,
            t,
            on,
            ox,
+           lb,
+           ub,
 
 # Include a hint for the correct naming format with invalid-name.
 include-naming-hint=no

@@ -1,12 +1,19 @@
 """ Train the RL agent. """
 import json
+import random
+
+import torch
+import numpy as np
 from oxentiel import Oxentiel
 from aer.env import AutomatedEmissionsReductionEnv
 from aer.rl.trainer import train
 
-SETTINGS_PATH = "settings_vpg.json"
+SETTINGS_PATH = "settings.json"
 SOURCE_PATH = "data/MOERS.csv"
 
+torch.manual_seed(5)
+np.random.seed(0)
+random.seed(0)
 
 def main() -> None:
     """ Just loads the settings file and calls ``train()``. """

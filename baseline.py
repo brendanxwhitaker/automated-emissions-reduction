@@ -17,7 +17,7 @@ def main() -> None:
         ob = env.reset()
         for _ in range(200000):
             act = agent.act(ob)
-            ob, rew, done, info = env.step(act)
+            ob, _, done, info = env.step(act)
 
             co2 = info["co2"]
             emissions.append(co2)
