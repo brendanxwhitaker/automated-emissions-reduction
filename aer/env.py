@@ -39,6 +39,9 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         self.series -= 750
         self.series /= 750
 
+        self.lb = 34.0
+        self.ub = 42.0
+
         # Repeat each step 5 times to get minute-resolution.
         self.series = self.series.reshape(1, -1)
         self.series = np.tile(self.series, (self.res_scale_factor, 1))
@@ -67,7 +70,7 @@ class AutomatedEmissionsReductionEnv(gym.Env):
     def reset(self) -> Array[float, 13]:
         """ Resets the environment. """
         self.i = 0
-        self.temperature = 33
+        self.temperature = 33.0
         self.refrigerating = False
 
         rates = list(self.series[self.i : self.i + 12])
@@ -95,9 +98,7 @@ class AutomatedEmissionsReductionEnv(gym.Env):
             Irrelevant for this problem, used to hold additional information.
         """
         # Turn on/off the refrigerator if necessary.
-        if self.refrigerating and act == 0:
-            self.refrigerating = False
-        elif not self.refrigerating and act == 1:
+        if act == 1:
             self.refrigerating = True
 
         if self.refrigerating:
@@ -115,19 +116,19 @@ class AutomatedEmissionsReductionEnv(gym.Env):
 
         # Compute CO2 emissions in lbs for this interval.
         # Reward is negative of emissions.
-        rew = -mwhs * self.series[self.i]
         co2 = mwhs * ((self.series[self.i] * 750) + 750)
 
-        rew *= 10000
+        rew = -co2
+        rew *= 100
         # base_rew = rew
         penalty = 0.0
 
-        if not 33 <= self.temperature <= 43:
-            if self.temperature < 33:
-                error = 33 - self.temperature
+        if not self.lb <= self.temperature <= self.ub:
+            if self.temperature < self.lb:
+                error = self.lb - self.temperature
             else:
-                error = self.temperature - 43
-            penalty = -1 * (1 + error)
+                error = self.temperature - self.ub
+            penalty = -10 * (1 + error)
             rew += penalty
 
         # print(f"temp/rew/base_rew/temp_penalty/act: ")
@@ -141,5 +142,7 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         done = False
         if self.i + 12 >= len(self.series):
             done = True
+
+        self.refrigerating = False
 
         return ob, rew, done, {"co2": co2, "oob": oob}

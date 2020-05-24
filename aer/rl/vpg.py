@@ -38,6 +38,8 @@ class Actor(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.Tanh(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Tanh(),
             nn.Linear(hidden_dim, num_actions),
             nn.Identity(),
         )
@@ -84,6 +86,8 @@ class Critic(nn.Module):
         super().__init__()
         self._critic = nn.Sequential(
             nn.Linear(ob_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.Tanh(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.Tanh(),
