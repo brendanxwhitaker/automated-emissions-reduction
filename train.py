@@ -11,7 +11,7 @@ from aer.trainer import train
 SETTINGS_PATH = "settings.json"
 SOURCE_PATH = "data/MOERS.csv"
 
-torch.manual_seed(5)
+torch.manual_seed(8)
 np.random.seed(0)
 random.seed(0)
 

@@ -1,8 +1,8 @@
 {
     "=================VPG=================": 0,
     "env_name": "CartPole-v0",
-    "lr": 0.01,
-    "lr_cycle_steps": 200,
+    "lr": 0.005,
+    "lr_cycle_steps": 500,
     "pct_start": 0.3,
     "hidden_dim": 128,
     "iterations": 10000000,
