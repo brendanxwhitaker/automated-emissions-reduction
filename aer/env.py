@@ -7,7 +7,7 @@ from asta import Array
 from aer.utils import read_series
 
 
-class AutomatedEmissionsReductionEnv(gym.Env):
+class TDEmissionsEnv(gym.Env):
     """
     A gym environment for minimizing CO2 emissions of a refrigerator given MOER values.
 
@@ -27,15 +27,8 @@ class AutomatedEmissionsReductionEnv(gym.Env):
 
         # The observation space is the product of the space of 12d vectors of MOER
         # values and the space of temperatures.
-
-        # OLD VERSION
-        # low = np.array([-1, -1] + ([-1] * self.res))
-        # high = np.array([1, 1] + ([1] * self.res))
-
-        # DERIVATIVE VERSION
         low = np.array([-1, -1] + ([-1] * (self.res - 1)))
         high = np.array([1, 1] + ([1] * (self.res - 1)))
-
         self.observation_space = gym.spaces.Box(low, high)
 
         # The two actions are refrigerator - ``ON`` and ``OFF``.
@@ -142,9 +135,6 @@ class AutomatedEmissionsReductionEnv(gym.Env):
             penalty = -10 * (1 + error)
             rew += penalty
 
-        # print(f"temp/rew/base_rew/temp_penalty/act: ")
-        # print(f"{self.temperature:.3f}/{rew:.3f}/{base_rew:.3f}/{penalty:.3f}/{act}")
-
         # Increment pointer for emissions rate array, and compute next observation.
         self.i += 1
         rates = list(self.series[self.i : self.i + self.res])
@@ -157,3 +147,34 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         self.refrigerating = False
 
         return ob, rew, done, {"co2": co2, "oob": oob}
+
+
+class SimpleEmissionsEnv(TDEmissionsEnv):
+    """
+    A gym environment for minimizing CO2 emissions of a refrigerator given MOER values.
+
+    Parameters
+    ----------
+    source_path : ``str``.
+        The path to CSV of MOER values.
+    """
+
+    def __init__(self, source_path: str):
+        super().__init__(source_path)
+        low = np.array([-1, -1] + ([-1] * self.res))
+        high = np.array([1, 1] + ([1] * self.res))
+        self.observation_space = gym.spaces.Box(low, high)
+
+    def render(self) -> None:
+        """ This is just here to make pylint happy. """
+        raise NotImplementedError
+
+    @staticmethod
+    def get_obs(
+        temperature: float, refrigerating: bool, rates: List[float]
+    ) -> Array[float, 14]:
+        """ Return the observation, with temperature normalized. """
+        normed_temperature = (temperature - 38) / 10
+        fridge = 1 if refrigerating else -1
+        ob = np.array([normed_temperature, fridge] + rates)
+        return ob
