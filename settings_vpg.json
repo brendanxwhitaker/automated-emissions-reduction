@@ -1,8 +1,8 @@
 {
     "env_name": "CartPole-v0",
-    "lr": 0.005,
-    "hidden_dim": 32,
-    "iterations": 1000000,
+    "lr": 0.001,
+    "hidden_dim": 64,
+    "iterations": 10000000,
     "batch_size": 5000,
     "epochs": 50,
     "gamma": 0.99,
