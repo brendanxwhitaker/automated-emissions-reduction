@@ -19,17 +19,24 @@ class AutomatedEmissionsReductionEnv(gym.Env):
 
     def __init__(self, source_path: str):
 
-        # The observation space is the product of the space of 12d vectors of MOER
-        # values and the space of temperatures.
-        low = np.array([-1, -1] + ([-1] * 12))
-        high = np.array([1, 1] + ([1] * 12))
-        self.observation_space = gym.spaces.Box(low, high)
-
         # Resolution.
         self.res = 12
         self.base_res = 12
         assert self.res % self.base_res == 0
         self.res_scale_factor = self.res // self.base_res
+
+        # The observation space is the product of the space of 12d vectors of MOER
+        # values and the space of temperatures.
+
+        # OLD VERSION
+        # low = np.array([-1, -1] + ([-1] * self.res))
+        # high = np.array([1, 1] + ([1] * self.res))
+
+        # DERIVATIVE VERSION
+        low = np.array([-1, -1] + ([-1] * (self.res - 1)))
+        high = np.array([1, 1] + ([1] * (self.res - 1)))
+
+        self.observation_space = gym.spaces.Box(low, high)
 
         # The two actions are refrigerator - ``ON`` and ``OFF``.
         self.action_space = gym.spaces.Discrete(2)
@@ -64,7 +71,11 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         """ Return the observation, with temperature normalized. """
         normed_temperature = (temperature - 38) / 10
         fridge = 1 if refrigerating else -1
-        ob = np.array([normed_temperature, fridge] + rates)
+        deltas = []
+        for i, _ in enumerate(rates[:-1]):
+            delta = rates[i + 1] - rates[i]
+            deltas.append(delta)
+        ob = np.array([normed_temperature, fridge] + deltas)
         return ob
 
     def reset(self) -> Array[float, 13]:
@@ -73,7 +84,7 @@ class AutomatedEmissionsReductionEnv(gym.Env):
         self.temperature = 33.0
         self.refrigerating = False
 
-        rates = list(self.series[self.i : self.i + 12])
+        rates = list(self.series[self.i : self.i + self.res])
         ob = self.get_obs(self.temperature, self.refrigerating, rates)
         return ob
 
@@ -136,11 +147,11 @@ class AutomatedEmissionsReductionEnv(gym.Env):
 
         # Increment pointer for emissions rate array, and compute next observation.
         self.i += 1
-        rates = list(self.series[self.i : self.i + 12])
+        rates = list(self.series[self.i : self.i + self.res])
         ob = self.get_obs(self.temperature, self.refrigerating, rates)
 
         done = False
-        if self.i + 12 >= len(self.series):
+        if self.i + self.res >= len(self.series):
             done = True
 
         self.refrigerating = False
