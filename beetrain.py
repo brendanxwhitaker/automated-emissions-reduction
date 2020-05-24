@@ -6,9 +6,10 @@ import torch
 import numpy as np
 from oxentiel import Oxentiel
 from aer.env import AutomatedEmissionsReductionEnv
-from aer.trainer import train
+from aer.rl.trainer import train
+from aer.bees.worker import worker_loop
 
-SETTINGS_PATH = "settings.json"
+SETTINGS_PATH = "bsettings.json"
 SOURCE_PATH = "data/MOERS.csv"
 
 torch.manual_seed(5)
@@ -21,8 +22,7 @@ def main() -> None:
     with open(SETTINGS_PATH, "r") as settings_file:
         settings = json.load(settings_file)
     ox = Oxentiel(settings)
-    env = AutomatedEmissionsReductionEnv(SOURCE_PATH)
-    train(ox, env)
+    worker_loop(ox)
 
 
 if __name__ == "__main__":

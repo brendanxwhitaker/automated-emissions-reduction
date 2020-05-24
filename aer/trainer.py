@@ -7,8 +7,8 @@ from torch.optim.lr_scheduler import OneCycleLR
 from oxentiel import Oxentiel
 from asta import Array, Tensor, shapes, dims
 
-from aer.rl.vpg import ActorCritic, RolloutStorage
-from aer.rl.vpg import (
+from aer.vpg import ActorCritic, RolloutStorage
+from aer.vpg import (
     get_action,
     get_advantages,
     get_rewards_to_go,
