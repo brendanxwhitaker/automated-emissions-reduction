@@ -24,6 +24,7 @@ SETTINGS_PATH = "settings_vpg.json"
 def train(ox: Oxentiel, env: gym.Env) -> None:
     """ Trains a policy gradient model with hyperparams from ``ox``. """
     # Set shapes and dimensions for use in type hints.
+    dims.RESOLUTION = ox.resolution
     dims.BATCH = ox.batch_size
     dims.ACTS = env.action_space.n
     shapes.OB = env.observation_space.shape

@@ -9,7 +9,6 @@ from aer.env import TDEmissionsEnv
 from aer.trainer import train
 
 SETTINGS_PATH = "settings.json"
-SOURCE_PATH = "data/MOERS.csv"
 
 torch.manual_seed(8)
 np.random.seed(0)
@@ -21,7 +20,7 @@ def main() -> None:
     with open(SETTINGS_PATH, "r") as settings_file:
         settings = json.load(settings_file)
     ox = Oxentiel(settings)
-    env = TDEmissionsEnv(SOURCE_PATH)
+    env = TDEmissionsEnv(ox)
     train(ox, env)
 
 
