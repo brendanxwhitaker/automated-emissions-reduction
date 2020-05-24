@@ -5,7 +5,7 @@ import random
 import torch
 import numpy as np
 from oxentiel import Oxentiel
-from aer.env import AutomatedEmissionsReductionEnv
+from aer.env import TDEmissionsEnv
 from aer.trainer import train
 
 SETTINGS_PATH = "settings.json"
@@ -21,7 +21,7 @@ def main() -> None:
     with open(SETTINGS_PATH, "r") as settings_file:
         settings = json.load(settings_file)
     ox = Oxentiel(settings)
-    env = AutomatedEmissionsReductionEnv(SOURCE_PATH)
+    env = TDEmissionsEnv(SOURCE_PATH)
     train(ox, env)
 
 

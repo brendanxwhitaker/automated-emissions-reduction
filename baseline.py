@@ -1,5 +1,5 @@
 """ Train the RL agent. """
-from aer.env import AutomatedEmissionsReductionEnv
+from aer.env import SimpleEmissionsEnv
 from aer.agent import DeterministicAgent
 
 SOURCE_PATH = "data/MOERS.csv"
@@ -10,7 +10,7 @@ def main() -> None:
     cutoffs = {}
 
     for cutoff in range(300, 800, 25):
-        env = AutomatedEmissionsReductionEnv(SOURCE_PATH)
+        env = SimpleEmissionsEnv(SOURCE_PATH)
         agent = DeterministicAgent(cutoff=cutoff)
 
         emissions = []
