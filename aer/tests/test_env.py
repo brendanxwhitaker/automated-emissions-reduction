@@ -59,7 +59,7 @@ def configs(draw: Callable[[st.SearchStrategy], Any], tempdir: str) -> Oxentiel:
     assume(len(dataset) > base_resolution)
     assume(len(dataset) > resolution)
 
-    settings = {
+    ox_settings = {
         "source_path": source_path,
         "lr": lr,
         "lr_cycle_steps": lr_cycle_steps,
@@ -74,7 +74,7 @@ def configs(draw: Callable[[st.SearchStrategy], Any], tempdir: str) -> Oxentiel:
         "start": "",
         "end": "",
     }
-    ox = Oxentiel(settings)
+    ox = Oxentiel(ox_settings)
     return ox
 
 
@@ -96,7 +96,7 @@ def test_td_env(data: st.DataObject) -> None:
     shutil.rmtree(tempdir)
 
 
-@settings(suppress_health_check=[HealthCheck.filter_too_much])
+@settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
 @given(st.data())
 def test_simple_env(data: st.DataObject) -> None:
     """ Test. """

@@ -3,7 +3,7 @@
     "agent": "vpg",
     "cutoff": 600,
     "source_path": "data/MOERS.csv",
-    "save_path": "models/small.pkl",
+    "save_path": "models/devnull.pkl",
     "load_path": "models/reference.pkl",
     "svg_path": "images/vpg.svg",
     "save_interval": 20000,

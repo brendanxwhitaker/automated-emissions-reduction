@@ -25,6 +25,8 @@ Deterministic : 227.462 lbs C02
 VPG : 215.575 lbs CO2
     Pretrained weights : ``models/reference.pkl``.
 
+Plots are in the ``images/`` directory.
+
 Approach
 ========
 Writing a naive version of the environment and VPG code was fairly

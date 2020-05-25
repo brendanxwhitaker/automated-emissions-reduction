@@ -52,29 +52,6 @@ class DeterministicAgent(Agent):
 
         return act
 
-    def augment(self, ob: Array[float, N]) -> Tuple[int, bool]:
-        """ Given an observation, returns an action and OOB status. """
-        normalized_temperature = float(ob[0])
-        normalized_rates = list(ob[2:])
-
-        temperature = (normalized_temperature * 10) + 38
-        rates = [int((rate * 750) + 750) for rate in normalized_rates]
-
-        act = 0
-
-        # Deterministic version.
-        act = self.deterministic_cutoff(rates[0], self.cutoff)
-
-        oob = False
-        if temperature > 42:
-            act = 1
-            oob = True
-        elif temperature < 34:
-            act = 0
-            oob = True
-
-        return act, oob
-
     @staticmethod
     def deterministic_cutoff(rate: int, cutoff: int) -> int:
         """ Determines action deterministically. """
