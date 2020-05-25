@@ -7,7 +7,7 @@ from typing import Callable, Any
 import pandas as pd
 import hypothesis.strategies as st
 import hypothesis.extra.pandas as hpd
-from hypothesis import given, assume
+from hypothesis import given, assume, settings, HealthCheck
 from oxentiel import Oxentiel
 
 from aer.env import TDEmissionsEnv, SimpleEmissionsEnv
@@ -57,6 +57,7 @@ def configs(draw: Callable[[st.SearchStrategy], Any], tempdir: str) -> Oxentiel:
     lam = draw(st.floats(min_value=0, max_value=1))
 
     assume(len(dataset) > base_resolution)
+    assume(len(dataset) > resolution)
 
     settings = {
         "source_path": source_path,
@@ -70,11 +71,14 @@ def configs(draw: Callable[[st.SearchStrategy], Any], tempdir: str) -> Oxentiel:
         "base_resolution": base_resolution,
         "gamma": gamma,
         "lam": lam,
+        "start": "",
+        "end": "",
     }
     ox = Oxentiel(settings)
     return ox
 
 
+@settings(suppress_health_check=[HealthCheck.filter_too_much])
 @given(st.data())
 def test_td_env(data: st.DataObject) -> None:
     """ Test. """
@@ -92,6 +96,7 @@ def test_td_env(data: st.DataObject) -> None:
     shutil.rmtree(tempdir)
 
 
+@settings(suppress_health_check=[HealthCheck.filter_too_much])
 @given(st.data())
 def test_simple_env(data: st.DataObject) -> None:
     """ Test. """

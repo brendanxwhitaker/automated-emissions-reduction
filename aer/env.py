@@ -38,7 +38,7 @@ class TDEmissionsEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(2)
 
         # Load the time series and normalize.
-        self.series: Array[float, -1] = read_series(ox.source_path)
+        self.series: Array[float, -1] = read_series(ox.source_path, ox.start, ox.end)
         self.series -= 750
         self.series /= 750
 
@@ -178,10 +178,19 @@ class TDEmissionsEnv(gym.Env):
         if self.i + self.res >= len(self.series):
             done = True
 
+        status = self.refrigerating
+
         # Only keep fridge ON for one step.
         self.refrigerating = False
 
-        return ob, rew, done, {"co2": co2, "oob": oob}
+        info = {
+            "co2": co2,
+            "oob": oob,
+            "on": status,
+            "moer": self.series[self.i - 1],
+            "temp": self.temperature,
+        }
+        return ob, rew, done, info
 
 
 @typechecked
