@@ -2,11 +2,8 @@ __pycache__
 *.swp
 logs/
 .mypy_cache/
-models/
 .hypothesis/
 .coverage
 *.egg-info
 build/
 dist/
-*.csv
-*.svg
