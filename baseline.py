@@ -1,23 +1,36 @@
 """ Train the RL agent. """
-from aer.env import AutomatedEmissionsReductionEnv
+import json
+from asta import dims
+from oxentiel import Oxentiel
+from aer.env import SimpleEmissionsEnv
 from aer.agent import DeterministicAgent
 
-SOURCE_PATH = "data/MOERS.csv"
+SETTINGS_PATH = "settings.json"
 
 
 def main() -> None:
     """ . """
+    # Read in the settings file.
+    with open(SETTINGS_PATH, "r") as settings_file:
+        settings = json.load(settings_file)
+    ox = Oxentiel(settings)
+
+    # Set typecheck variables.
+    dims.RESOLUTION = ox.resolution
+
+    # Map cutoff values to the resulting total emissions.
     cutoffs = {}
 
-    for cutoff in range(300, 800, 25):
-        env = AutomatedEmissionsReductionEnv(SOURCE_PATH)
+    # Search for the optimal cutoff MOER value.
+    for cutoff in range(500, 700, 10):
+        env = SimpleEmissionsEnv(ox)
         agent = DeterministicAgent(cutoff=cutoff)
 
         emissions = []
         ob = env.reset()
         for _ in range(200000):
             act = agent.act(ob)
-            ob, rew, done, info = env.step(act)
+            ob, _, done, info = env.step(act)
 
             co2 = info["co2"]
             emissions.append(co2)
@@ -26,7 +39,7 @@ def main() -> None:
                 break
 
         lbs = sum(emissions)
-        print("Cutoff:", cutoff, "emissions:", lbs)
+        print("|||||||||||||||||||||||| Cutoff:", cutoff, "emissions:", lbs)
         cutoffs[cutoff] = lbs
 
 
