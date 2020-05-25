@@ -39,7 +39,7 @@ def main() -> None:
                 break
 
         lbs = sum(emissions)
-        print("Cutoff:", cutoff, "emissions:", lbs)
+        print("|||||||||||||||||||||||| Cutoff:", cutoff, "emissions:", lbs)
         cutoffs[cutoff] = lbs
 
 
