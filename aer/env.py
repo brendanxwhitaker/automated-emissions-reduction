@@ -2,50 +2,60 @@
 from typing import Tuple, List
 import gym
 import numpy as np
-from asta import Array
+from asta import Array, dims, typechecked
+from oxentiel import Oxentiel
 
 from aer.utils import read_series
 from aer.agent import DeterministicAgent
 
+RES = dims.RESOLUTION
 
-class AutomatedEmissionsReductionEnv(gym.Env):
+
+@typechecked
+class TDEmissionsEnv(gym.Env):
     """
     A gym environment for minimizing CO2 emissions of a refrigerator given MOER values.
 
     Parameters
     ----------
-    source_path : ``str``.
-        The path to CSV of MOER values.
+    ox : ``Oxentiel``.
+        A configuration object (corresponds to ``settings.json``).
     """
 
-    def __init__(self, source_path: str):
+    def __init__(self, ox: Oxentiel):
+        self.res = ox.resolution
+        self.base_res = ox.base_resolution
 
-        # The observation space is the product of the space of 12d vectors of MOER
-        # values and the space of temperatures.
-        low = np.array([-1, -1] + ([-1] * 12))
-        high = np.array([1, 1] + ([1] * 12))
-        self.observation_space = gym.spaces.Box(low, high)
-
-        # Resolution.
-        self.res = 12
-        self.base_res = 12
+        # Compute the scale factor if we need to upscale resolution of MOER sequence.
         assert self.res % self.base_res == 0
         self.res_scale_factor = self.res // self.base_res
 
-        # The two actions are refrigerator - ``ON`` and ``OFF``.
+        # See docstring for ``TDEmissionsEnv.get_obs()`` for composition.
+        low = np.array([-1] * (self.res + 1))
+        high = np.array([1] * (self.res + 1))
+        self.observation_space = gym.spaces.Box(low, high)
+
+        # Actions: 0 keeps fridge off, 1 turns fridge on for one timestep.
         self.action_space = gym.spaces.Discrete(2)
 
         # Load the time series and normalize.
-        self.series: Array[float, -1] = read_series(source_path)
+        self.series: Array[float, -1] = read_series(ox.source_path, ox.start, ox.end)
         self.series -= 750
         self.series /= 750
 
-        # Repeat each step 5 times to get minute-resolution.
+        # Set lower and upper bounds for penalty in reward function.
+        self.lb = 34.0
+        self.ub = 42.0
+
+        # Repeat each step k times to upscale to desired resolution.
         self.series = self.series.reshape(1, -1)
         self.series = np.tile(self.series, (self.res_scale_factor, 1))
         self.series = np.transpose(self.series)
         self.series = self.series.reshape(-1)
 
+        assert len(self.series) >= self.res
+
+        # Initialize the pointer for MOER sequence position and temperature.
         self.i = 0
         self.power = 200 * 10e-6
         self.temperature = 33.0
@@ -58,24 +68,51 @@ class AutomatedEmissionsReductionEnv(gym.Env):
     @staticmethod
     def get_ob(
         temperature: float, refrigerating: bool, rates: List[float]
-    ) -> Array[float, 14]:
-        """ Return the observation, with temperature normalized. """
+    ) -> Array[float, RES + 1]:
+        """
+        Return the observation, with temperature normalized.
+
+        Parameters
+        ----------
+        temperature : ``float``.
+            The temperature in fridge in degrees F.
+        refrigerating : ``bool``.
+            Whether or not we the fridge is on for this timestep.
+        rates : ``List[float]``.
+            The MOER values for the next hour.
+            Shape: ``(self.res,)``.
+
+        Returns
+        -------
+        ob : ``Array[float, RES + 1]``.
+            Observation of the form:
+                [<normed_temp>, <fridge_status>, <differences_of_MOERs>].
+            See below for more details.
+        """
         normed_temperature = (temperature - 38) / 10
         fridge = 1 if refrigerating else -1
-        ob = np.array([normed_temperature, fridge] + rates)
+
+        # Compute the temporal differences between rates.
+        deltas = []
+        for i, _ in enumerate(rates[:-1]):
+            delta = rates[i + 1] - rates[i]
+            deltas.append(delta)
+
+        # Now ``len(deltas) == len(rates) - 1``.
+        ob = np.array([normed_temperature, fridge] + deltas)
         return ob
 
-    def reset(self) -> Array[float, 14]:
+    def reset(self) -> Array[float, -1]:
         """ Resets the environment. """
         self.i = 0
-        self.temperature = 33
+        self.temperature = 33.0
         self.refrigerating = False
 
-        rates = list(self.series[self.i : self.i + 12])
-        ob = self.get_ob(self.temperature, self.refrigerating, rates)
+        rates = list(self.series[self.i : self.i + self.res])
+        ob = self.get_obs(self.temperature, self.refrigerating, rates)
         return ob
 
-    def step(self, act: int) -> Tuple[Array[float, 14], float, bool, dict]:
+    def step(self, act: int) -> Tuple[Array[float, -1], float, bool, dict]:
         """
         Takes an integer action and steps the environment.
 
@@ -86,83 +123,79 @@ class AutomatedEmissionsReductionEnv(gym.Env):
 
         Returns
         -------
-        ob : ``Array[float, 12]``.
-            The next set of 12 MOER values in lbs/KWh.
+        ob : ``Array[float, -1]``.
+            See ``get_ob()`` in the relevant environment class.
         rew : ``float``.
             The reward for the given action.
         done : ``bool``.
             Whether or not the environment has reached a terminal state.
         info : ``dict``.
-            Irrelevant for this problem, used to hold additional information.
+            Used to hold additional information.
         """
-        # Turn on/off the refrigerator if necessary.
-        if self.refrigerating and act == 0:
-            self.refrigerating = False
-        elif not self.refrigerating and act == 1:
+        # If action is ``1``, turn on the fridge for one timestep.
+        if act == 1:
             self.refrigerating = True
 
+        # Adjust temperature based on whether fridge is ON.
         if self.refrigerating:
             self.temperature -= 10 * (1 / self.res)
         else:
             self.temperature += 5 * (1 / self.res)
 
+        # Keep temperature in a reasonable range so values don't explode.
         self.temperature = max(self.temperature, 28)
         self.temperature = min(self.temperature, 48)
 
-        oob = self.temperature < 33 or self.temperature > 43
+        # Determine if temperature is Out Of Bounds.
+        oob: bool = self.temperature < 33 or self.temperature > 43
 
         # Compute energy consumption for this interval.
         mwhs = (1 / self.res) * self.power if self.refrigerating else 0
 
         # Compute CO2 emissions in lbs for this interval.
-        # Reward is negative of emissions.
         co2 = mwhs * ((self.series[self.i] * 750) + 750)
 
-        # Compute reward.
-        rew = self.get_emissions_reward(mwhs, self.series[self.i])
+        # Reward is scaled negative of emissions.
+        rew = -co2
+        rew *= 100
 
-        # print(f"temp/rew/base_rew/temp_penalty/act: ")
-        # print(f"{self.temperature:.3f}/{rew:.3f}/{base_rew:.3f}/{penalty:.3f}/{act}")
+        # Compute penalty based on how far temperature is from bounds.
+        penalty = 0.0
+        if not self.lb <= self.temperature <= self.ub:
+            if self.temperature < self.lb:
+                error = self.lb - self.temperature
+            else:
+                error = self.temperature - self.ub
+            penalty = -10 * (1 + error)
+            rew += penalty
 
         # Increment pointer for emissions rate array, and compute next observation.
         self.i += 1
-        rates = list(self.series[self.i : self.i + 12])
-        ob = self.get_ob(self.temperature, self.refrigerating, rates)
+        rates = list(self.series[self.i : self.i + self.res])
+        ob = self.get_obs(self.temperature, self.refrigerating, rates)
 
+        # Determine if we've reached the end of the dataset.
         done = False
-        if self.i + 12 >= len(self.series):
+        if self.i + self.res >= len(self.series):
             done = True
 
-        return ob, rew, done, {"co2": co2, "oob": oob}
+        status = self.refrigerating
 
-    @staticmethod
-    def get_dual_reward(mwhs: float, rate: float, temperature: float) -> float:
-        """ Computes reward incorporating emissions and temperature range. """
-        rew = -mwhs * rate
-        rew *= 10000
-        penalty = 0.0
+        # Only keep fridge ON for one step.
+        self.refrigerating = False
 
-        cushion = 0.5
-        if temperature < 33 + cushion or 43 - cushion < temperature:
-            if temperature < 33 + cushion:
-                error = 33 + cushion - temperature
-            else:
-                error = temperature - (43 - cushion)
-            penalty = -1 * (1 + error)
-            penalty *= 5
-            rew += penalty
-
-        return rew
-
-    @staticmethod
-    def get_emissions_reward(mwhs: float, rate: float) -> float:
-        """ Computes reward minimizing emissions only. """
-        rew = -mwhs * rate
-        rew *= 100000
-        return rew
+        info = {
+            "co2": co2,
+            "oob": oob,
+            "on": status,
+            "moer": self.series[self.i - 1],
+            "temp": self.temperature,
+        }
+        return ob, rew, done, info
 
 
-class SimplifiedAEREnv(gym.Env):
+@typechecked
+class SimpleEmissionsEnv(TDEmissionsEnv):
     """
     A gym environment for minimizing CO2 emissions of a refrigerator given MOER values.
 
@@ -172,123 +205,42 @@ class SimplifiedAEREnv(gym.Env):
         The path to CSV of MOER values.
     """
 
-    def __init__(self, source_path: str):
+    def __init__(self, ox: Oxentiel):
+        super().__init__(ox)
 
-        # The observation space is the product of the space of 12d vectors of MOER
-        # values and the space of temperatures.
-        low = np.array([-1] * 4)
-        high = np.array([1] * 4)
+        # We return the rates instead of differences here, so len(ob) == res + 2.
+        low = np.array([-1] * (self.res + 2))
+        high = np.array([1] * (self.res + 2))
         self.observation_space = gym.spaces.Box(low, high)
-
-        # Resolution.
-        self.res = 12
-        self.base_res = 12
-        assert self.res % self.base_res == 0
-        self.res_scale_factor = self.res // self.base_res
-
-        # The two actions are refrigerator - ``ON`` and ``OFF``.
-        self.action_space = gym.spaces.Discrete(2)
-
-        # Load the time series and normalize.
-        self.series: Array[float, -1] = read_series(source_path)
-        self.series -= 750
-        self.series /= 750
-
-        # Repeat each step 5 times to get minute-resolution.
-        self.series = self.series.reshape(1, -1)
-        self.series = np.tile(self.series, (self.res_scale_factor, 1))
-        self.series = np.transpose(self.series)
-        self.series = self.series.reshape(-1)
-
-        self.i = 0
-        self.power = 200 * 10e-6
-        self.temperature = 33.0
-        self.refrigerating = False
 
     def render(self) -> None:
         """ This is just here to make pylint happy. """
         raise NotImplementedError
 
-    def get_ob(self) -> Array[float, 4]:
-        """ Return the observation, with temperature normalized. """
-        rate = self.series[self.i]
-        mean_rate = np.mean(self.series[self.i : self.i + 12])
-        normed_temperature = (self.temperature - 38) / 10
-        fridge = 1 if self.refrigerating else -1
-        ob = np.array([normed_temperature, fridge, rate, mean_rate])
-        return ob
-
-    def reset(self) -> Array[float, 4]:
-        """ Resets the environment. """
-        self.i = 0
-        self.temperature = 33
-        self.refrigerating = False
-        ob = self.get_ob()
-
-        return ob
-
-    def step(self, act: int) -> Tuple[Array[float, 4], float, bool, dict]:
+    @staticmethod
+    def get_obs(
+        temperature: float, refrigerating: bool, rates: List[float]
+    ) -> Array[float, RES + 2]:
         """
-        Takes an integer action and steps the environment.
+        Return the observation, with temperature normalized.
 
         Parameters
         ----------
-        act : ``int``.
-            The action, either ``0`` for ``OFF`` or ``1`` for ``ON``.
+        temperature : ``float``.
+            The temperature in fridge in degrees F.
+        refrigerating : ``bool``.
+            Whether or not we the fridge is on for this timestep.
+        rates : ``List[float]``.
+            The MOER values for the next hour.
+            Shape: ``(self.res,)``.
 
         Returns
         -------
-        ob : ``Array[float, 12]``.
-            The next set of 12 MOER values in lbs/KWh.
-        rew : ``float``.
-            The reward for the given action.
-        done : ``bool``.
-            Whether or not the environment has reached a terminal state.
-        info : ``dict``.
-            Irrelevant for this problem, used to hold additional information.
+        ob : ``Array[float, RES + 2]``.
+            Observation of the form:
+                [<normed_temp>, <fridge_status>, <MOERs>].
         """
-        # Turn on/off the refrigerator if necessary.
-        if self.refrigerating and act == 0:
-            self.refrigerating = False
-        elif not self.refrigerating and act == 1:
-            self.refrigerating = True
-
-        if self.refrigerating:
-            self.temperature -= 10 * (1 / self.res)
-        else:
-            self.temperature += 5 * (1 / self.res)
-
-        self.temperature = max(self.temperature, 28)
-        self.temperature = min(self.temperature, 48)
-
-        oob = self.temperature < 33 or self.temperature > 43
-
-        # Compute energy consumption for this interval.
-        mwhs = (1 / self.res) * self.power if self.refrigerating else 0
-
-        # Compute CO2 emissions in lbs for this interval.
-        # Reward is negative of emissions.
-        co2 = mwhs * ((self.series[self.i] * 750) + 750)
-
-        # Compute reward.
-        rew = self.get_emissions_reward(mwhs, self.series[self.i])
-
-        # print(f"temp/rew/base_rew/temp_penalty/act: ")
-        # print(f"{self.temperature:.3f}/{rew:.3f}/{base_rew:.3f}/{penalty:.3f}/{act}")
-
-        # Increment pointer for emissions rate array, and compute next observation.
-        self.i += 1
-        ob = self.get_ob()
-
-        done = False
-        if self.i + 12 >= len(self.series):
-            done = True
-
-        return ob, rew, done, {"co2": co2, "oob": oob}
-
-    @staticmethod
-    def get_emissions_reward(mwhs: float, rate: float) -> float:
-        """ Computes reward minimizing emissions only. """
-        rew = -mwhs * rate
-        rew *= 100000
-        return rew
+        normed_temperature = (temperature - 38) / 10
+        fridge = 1 if refrigerating else -1
+        ob = np.array([normed_temperature, fridge] + rates)
+        return ob

@@ -2,14 +2,14 @@
 import time
 import gym
 import numpy as np
+import torch
 from torch.optim import Adam
-from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
+from torch.optim.lr_scheduler import OneCycleLR
 from oxentiel import Oxentiel
 from asta import Array, Tensor, shapes, dims
 
-from aer.agent import DeterministicAgent
-from aer.rl.vpg import ActorCritic, RolloutStorage
-from aer.rl.vpg import (
+from aer.vpg import ActorCritic, RolloutStorage
+from aer.vpg import (
     get_action,
     get_advantages,
     get_rewards_to_go,
@@ -17,14 +17,13 @@ from aer.rl.vpg import (
     get_value_loss,
 )
 
-SETTINGS_PATH = "settings_vpg.json"
-
 # pylint: disable=invalid-name
 
 
 def train(ox: Oxentiel, env: gym.Env) -> None:
     """ Trains a policy gradient model with hyperparams from ``ox``. """
     # Set shapes and dimensions for use in type hints.
+    dims.RESOLUTION = ox.resolution
     dims.BATCH = ox.batch_size
     dims.ACTS = env.action_space.n
     shapes.OB = env.observation_space.shape
@@ -36,6 +35,13 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
     policy_optimizer = Adam(ac.pi.parameters(), lr=ox.lr)
     value_optimizer = Adam(ac.v.parameters(), lr=ox.lr)
 
+    policy_scheduler = OneCycleLR(
+        policy_optimizer, ox.lr, ox.lr_cycle_steps, pct_start=ox.pct_start
+    )
+    value_scheduler = OneCycleLR(
+        value_optimizer, ox.lr, ox.lr_cycle_steps, pct_start=ox.pct_start
+    )
+
     # Create a buffer object to store trajectories.
     rollouts = RolloutStorage(ox.batch_size, shapes.OB)
 
@@ -43,17 +49,12 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
     ob: Array[float, shapes.OB]
     ob = env.reset()
 
-    # Agent to handle OOB situations.
-    agent = DeterministicAgent(cutoff=600)
-
     oobs = []
     co2s = []
-
     mean_co2 = 0
+    num_oobs = 0
 
     t_start = time.time()
-
-    epoch = 0
 
     for i in range(ox.iterations):
 
@@ -61,11 +62,6 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
         act: Array[int, ()]
         val: Array[float, ()]
         act, val = get_action(ac, ob)
-
-        # Handle temperature extremes (out of bounds).
-        oob_act, oob = agent.augment(ob)
-        if oob:
-            act = oob_act
 
         # Step the environment to get new observation, reward, done status, and info.
         next_ob: Array[float, shapes.OB]
@@ -78,8 +74,7 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
         oobs.append(info["oob"])
 
         # Add data for a timestep to the buffer.
-        if not oob:
-            rollouts.add(ob, act, val, rew)
+        rollouts.add(ob, act, val, rew)
 
         # Don't forget to update the observation.
         ob = next_ob
@@ -99,7 +94,6 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
             vals, rews = rollouts.get_episode_values_and_rewards()
 
             mean_rew = np.mean(rews)
-            num_oobs = sum([int(oob) for oob in oobs])
 
             # The last value should be zero if this is the end of an episode.
             last_val: float = 0.0 if done else vals[-1]
@@ -116,6 +110,7 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
                 # Reset the environment.
                 ob = env.reset()
                 mean_co2 = sum(co2s)
+                num_oobs = sum([int(oob) for oob in oobs])
                 co2s = []
                 oobs = []
 
@@ -144,24 +139,32 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
             policy_loss = get_policy_loss(ac.pi, obs, acts, advs)
             policy_loss.backward()
             policy_optimizer.step()
+            policy_scheduler.step()
 
             # Run a backward pass on the value function (critic).
             value_optimizer.zero_grad()
             value_loss = get_value_loss(ac.v, obs, rtgs)
             value_loss.backward()
             value_optimizer.step()
+            value_scheduler.step()
 
             # Reset pointers.
             rollouts.batch_len = 0
             rollouts.ep_start = 0
 
             # Print statistics.
+            lr = policy_scheduler.get_lr()
             print(f"Iteration: {i + 1} | ", end="")
             print(f"Time: {time.time() - t_start:.5f} | ", end="")
             print(f"Total co2: {mean_co2:.5f} | ", end="")
             print(f"Num OOBs: {num_oobs:.5f} | ", end="")
+            print(f"LR: {lr} | ", end="")
             print(f"Mean reward for current batch: {mean_rew:.5f}")
             t_start = time.time()
             rollouts.rets = []
             rollouts.lens = []
-            epoch += 1
+
+        if i > 0 and i % ox.save_interval == 0:
+            with open(ox.save_path, "wb") as model_file:
+                torch.save(ac, model_file)
+            print("=== saved model ===")
