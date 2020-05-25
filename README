@@ -1,3 +1,112 @@
 +-----------------------------+
 |automated-emissions-reduction|
 +-----------------------------+
+
+
+Introduction
+============
+This is a repo for minimizing the emissions of a refrigerator under the
+constraints that the temperature must be kept between 33F and 43F, the
+refrigerator draws 200W, and the emissions in lbs/MWh are given by the values
+in ``MOERS.csv``. I've chosen to frame this as a reinforcement learning
+problem, so the core logic of the simulator is contained in ``TDEmissionsEnv``,
+which inherits from ``gym.Env``. There are two agents in this repo, the
+deterministic agent, and a vanilla policy gradient implementation. I managed to
+get the VPG agent to outperform the deterministic agent by a significant (imho)
+margin, but only with the aid of a number of nontrivial training tricks.
+
+Results
+=======
+From 03-01-2019 00:00:00 to 04-01-2019 00:00:00:
+
+Deterministic : 227.462 lbs C02
+    Cutoff MOER : 600
+
+VPG : 215.575 lbs CO2
+    Pretrained weights : ``models/reference.pkl``.
+
+Approach
+========
+Writing a naive version of the environment and VPG code was fairly
+straightforward. Timesteps are in 5-minute resolution for simplicity, though
+this is adjustable, and the agents are allowed to push the temperature outside
+of hte safe zone. The baseline deterministic agent is the first thing I tried.
+It simply turns on the refrigerator whenever the current MOER is below its
+cutoff, and it overrides this action when it's in danger of leaving the safe
+temperature zone. The first action space I tried had a "sticky" toggle, where
+if the agent chose ON or OFF, the refrigerator would stay in that position
+until the next time the agent decided to choose the opposite action. This
+turned out to be poor design, since the algorithm has trouble learning the
+effects of its actions if it can't see them, and hitting ON when the
+refrigerator is already on does nothing. I later changed it to be more like
+Flappy Bird: the ON action only keeps the refrigerator ON for one timestep.
+This caused a significant drop in CO2 usage. Another mistake was using
+unnormalized MOERs at first, which wreak havoc on the VPG agent because it
+needs to learn very large bias values. Normalizing them also caused a large CO2
+drop. Adding the normalized temperature and a boolean indicator of the
+refrigerator status also seemed to help (at least before change the action
+space), and I left them in as a vestigial feature. The final big improvement
+came from using the TD-residuals of the MOER values instead of the values
+themselves. This is somewhat intuitive, because an optimal agent should keep
+the fridge on when the slope is close to zero and the MOER is smallish, which
+can be approximated by the change in slope over the 12 MOERs. This was the
+final change that pushed the VPG agent below the baseline.
+
+Seperate from these changes to the environment are the training details. The
+VPG agent uses 4-layer FF networks for the actor and critic, with RReLU
+activation functions. It is trained over 10e7 timesteps, which obviously means
+more than one epoch on the ~9500 step dataset, so there is an argument to be
+made that the agent can "see" timesteps past 1 hour, but it is less meaningful
+to say an RL agent has memorized training data than in the supervised learning
+case, since there are no ground-truth labels provided. It has probably overfit
+a little bit, but since from visual inspection the dataset has very rich
+autocorrelation, and is extremely consistent, in a real-life application this
+probably wouldn't be an issue. A failsafe agent could simply step in in cases
+where the VPG agent chooses to do something undesireable. I also made use of a
+fairly recent learning rate scheduler (see OneCycleLR/superconvergence), and
+graduate student descent to find the optimal max learning rate and torch seeds
+(I considered doing this with bayesian optim. but I got lucky and it didn't
+require too much time).
+
+Rewards
+=======
+The deterministic agent does not use the rewards provided by the environment.
+The VPG agent is given rewards which are scaled negatives of the CO2, plus a
+sliding penalty for being outside of the safe zone. Thus it is attempting to
+optimize two objectives at once, and this can be observed in pretraining, where
+the number of out of bounds temperatures drops more or less in lockstep with
+the CO2 emissions. The agent will sometimes learn a policy which is very good
+at one and bad at the other, but usually corrects itself with more training.
+
+Installation
+============
+A GPU is not required for training or the simulation. Run ``pip install -r
+requirements.txt`` in a python3 environment, and then all scripts should be
+functional. This has been tested on a fresh install of 18.04 with the latest
+version of conda3.
+
+Usage
+=====
+To run the simulation with the deterministic agent, set ``deterministic`` in
+the ``agent`` field of ``settings.json``, and type the desired output image
+name in the ``svg_path`` field. Then run with ``python3 refrigerator_sim.py``.
+
+To run the simulation with the VPG agent, set ``vpg`` in the ``agent`` field of
+``settings.json``, and type the desired output image name in the ``svg_path``
+field. Then set the path to the desired pickled model file in ``load_path``.
+Then run with ``python3 refrigerator_sim.py``.
+
+To "train" the deterministic agent, i.e. find the optimal cutoff MOER, run
+``python3 baseline.py``. Then set the chosen cutoff rate in ``settings.json``.
+
+To train the VPG agent and save weights to the value of the field
+``save_path``, run ``python3 train.py`` with the desired hyperparameters in
+``settings.json``.
+
+Notes
+=====
+The deterministic agent does not use TD residuals in its observations, hence
+the SimpleEmissionsEnv wrapper. This is mostly a moot difference since we could
+have also just wrapped the VPG agent in a module that preprocesses the
+observations by taking the TD residuals. They are functionally the same
+problem.
