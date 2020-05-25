@@ -2,13 +2,14 @@
 import time
 import gym
 import numpy as np
+import torch
 from torch.optim import Adam
 from torch.optim.lr_scheduler import OneCycleLR
 from oxentiel import Oxentiel
 from asta import Array, Tensor, shapes, dims
 
-from aer.rl.vpg import ActorCritic, RolloutStorage
-from aer.rl.vpg import (
+from aer.vpg import ActorCritic, RolloutStorage
+from aer.vpg import (
     get_action,
     get_advantages,
     get_rewards_to_go,
@@ -16,14 +17,13 @@ from aer.rl.vpg import (
     get_value_loss,
 )
 
-SETTINGS_PATH = "settings_vpg.json"
-
 # pylint: disable=invalid-name
 
 
 def train(ox: Oxentiel, env: gym.Env) -> None:
     """ Trains a policy gradient model with hyperparams from ``ox``. """
     # Set shapes and dimensions for use in type hints.
+    dims.RESOLUTION = ox.resolution
     dims.BATCH = ox.batch_size
     dims.ACTS = env.action_space.n
     shapes.OB = env.observation_space.shape
@@ -163,3 +163,8 @@ def train(ox: Oxentiel, env: gym.Env) -> None:
             t_start = time.time()
             rollouts.rets = []
             rollouts.lens = []
+
+        if i > 0 and i % ox.save_interval == 0:
+            with open(ox.save_path, "wb") as model_file:
+                torch.save(ac, model_file)
+            print("=== saved model ===")
