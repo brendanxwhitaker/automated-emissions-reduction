@@ -6,6 +6,7 @@ from asta import Array, dims, typechecked
 from oxentiel import Oxentiel
 
 from aer.utils import read_series
+from aer.agent import DeterministicAgent
 
 RES = dims.RESOLUTION
 
@@ -65,7 +66,7 @@ class TDEmissionsEnv(gym.Env):
         raise NotImplementedError
 
     @staticmethod
-    def get_obs(
+    def get_ob(
         temperature: float, refrigerating: bool, rates: List[float]
     ) -> Array[float, RES + 1]:
         """
